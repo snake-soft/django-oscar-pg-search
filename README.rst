@@ -57,7 +57,7 @@ Install using pip:
        'oscar_pg_search.apps.PgSearchConfig',
        # ...
    ]
-
+   OSCAR_PRODUCT_SEARCH_HANDLER = 'oscar_pg_search.postgres_search_handler.PostgresSearchHandler'
 
 Settings
 --------
