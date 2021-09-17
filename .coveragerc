@@ -1,0 +1,3 @@
+[run]
+source = oscar_pg_search
+omit = *migrations*
