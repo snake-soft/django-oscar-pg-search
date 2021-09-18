@@ -1,3 +1,7 @@
+.. image:: https://api.codeclimate.com/v1/badges/a289293e4e1af1114d74/maintainability
+   :target: https://codeclimate.com/github/snake-soft/django-oscar-pg-search/maintainability
+   :alt: Maintainability
+
 ==========================================
 Postgresql search handler for Django-Oscar
 ==========================================
