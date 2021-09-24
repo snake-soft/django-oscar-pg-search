@@ -2,8 +2,8 @@
 *.sw[po]
 
 # Packaging
-dist/*
-build/*
+dist/
+build/
 *.egg-info
 .eggs
 

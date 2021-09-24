@@ -1,3 +1,13 @@
-default_app_config = 'apps.search.apps.PgSearchConfig'
+import os
+from pathlib import Path
 
-__version__ = '0.8.0'
+
+def get_version():
+    path = Path(str(Path(__file__).parent.parent.parent) + os.sep + 'VERSION')
+    if path.is_file():
+        with open(path) as f:
+            return f.read().strip()
+    return '0.0.0'
+
+
+__version__ = get_version()
