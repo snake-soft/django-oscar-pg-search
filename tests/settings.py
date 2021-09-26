@@ -1,5 +1,6 @@
 from pathlib import Path
-
+from oscar.defaults import *
+import oscar
 
 SECRET_KEY = 'notverysecret'
 DEBUG = True
@@ -8,15 +9,13 @@ STATIC_URL = '/static/'
 USE_TZ = True
 BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
 
+
+HAYSTACK_CONNECTIONS = {"default": {}}
+
+
 INSTALLED_APPS = [
-    'django.contrib.admin',
-    'django.contrib.auth',
-    'django.contrib.contenttypes',
-    'django.contrib.sessions',
-    'django.contrib.staticfiles',
-    'django.contrib.messages',
     'changelog.apps.ChangelogConfig',
-]
+] + oscar.INSTALLED_APPS
 
 
 DATABASES = {

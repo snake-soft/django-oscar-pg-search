@@ -5,18 +5,11 @@ from src.oscar_pg_search import __version__
 
 install_requires = [
     'django>=2.2,<3.3',
-    'django-oscar>=3.0',
+    'django-oscar>=3.1',
 ]
 
 tests_require = [
-    'django-webtest==1.9.7',
-    'pytest-cov>=2.12,<2.13',
-    'pytest-django>=4.4,<4.5',
-    'freezegun>=1.1,<1.2',
-    'sorl-thumbnail',
-    'factory-boy>=3.2,<3.3',
     'coverage>=5.5,<5.6',
-    'tox>=3.17,<3.21',
 ]
 
 setup(

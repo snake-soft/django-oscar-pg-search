@@ -70,7 +70,7 @@ class SearchForm(forms.Form):
     # Use a tabindex of 1 so that users can hit tab on any page and it will
     # focus on the search widget.
     q = forms.CharField(
-        empty_value = '',
+        empty_value='',
         required=False, label=_('Search'),
         widget=SearchInput({
             "placeholder": _('Search'),

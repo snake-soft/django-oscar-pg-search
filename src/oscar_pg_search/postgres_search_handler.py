@@ -9,6 +9,7 @@ from django.contrib.postgres.search import TrigramSimilarity, SearchQuery,\
 from django.db.models import Q, F, ExpressionWrapper
 from django.utils.safestring import mark_safe
 from django.db.models.functions.comparison import Coalesce
+from django.db import connection
 
 from oscar.apps.catalogue.search_handlers import SimpleProductSearchHandler
 from oscar.core.loading import get_model
@@ -108,6 +109,12 @@ class PostgresSearchHandler(SimpleProductSearchHandler):
         return self.search_products(qs, query_string)
 
     def search_products(self, qs, query_string):
+        if connection.vendor != 'postgresql':
+            ''' fallback '''
+            if settings.DEBUG:
+                return qs
+            else:
+                raise NotImplementedError('Create fallback for non postgres db')
         if query_string:
             qs = qs.annotate(
                 upc_rank=Coalesce(
@@ -150,40 +157,47 @@ class PostgresSearchHandler(SimpleProductSearchHandler):
     def search_categories(self, query_string):
         """ Return categories that contain query_string """
         qs = Category.objects.browsable()
-        qs = qs.annotate(
-            name_rank=Coalesce(
-                TrigramSimilarity('name', query_string), 0,
-                output_field=models.DecimalField(),
-            ),
-        )
-        qs = qs.annotate(
-            description_rank=Coalesce(
-                TrigramSimilarity('description', query_string), 0,
-                output_field=models.DecimalField(),
+        if connection.vendor != 'postgresql':
+            ''' fallback '''
+            if settings.DEBUG:
+                return qs
+            else:
+                raise NotImplementedError('Create fallback for non postgres db')
+        else:
+            qs = qs.annotate(
+                name_rank=Coalesce(
+                    TrigramSimilarity('name', query_string), 0,
+                    output_field=models.DecimalField(),
+                ),
             )
-        )
-        qs = qs.annotate(
-            meta_description_rank=Coalesce(
-                TrigramSimilarity('meta_description', query_string), 0,
-                output_field=models.DecimalField(),
+            qs = qs.annotate(
+                description_rank=Coalesce(
+                    TrigramSimilarity('description', query_string), 0,
+                    output_field=models.DecimalField(),
+                )
             )
-        )
-        qs = qs.annotate(
-            meta_title_rank=Coalesce(
-                TrigramSimilarity('meta_title', query_string), 0,
-                output_field=models.DecimalField(),
-            ),
-        )
-        qs = qs.annotate(
-            rank=ExpressionWrapper(
-                F('name_rank')
-                + F('meta_description_rank')
-                + F('meta_title_rank') * 2
-                + F('description_rank'),
-                output_field=models.DecimalField(),
+            qs = qs.annotate(
+                meta_description_rank=Coalesce(
+                    TrigramSimilarity('meta_description', query_string), 0,
+                    output_field=models.DecimalField(),
+                )
             )
-        )
-        qs = qs.filter(rank__gte=0.17).order_by('depth', '-rank')
+            qs = qs.annotate(
+                meta_title_rank=Coalesce(
+                    TrigramSimilarity('meta_title', query_string), 0,
+                    output_field=models.DecimalField(),
+                ),
+            )
+            qs = qs.annotate(
+                rank=ExpressionWrapper(
+                    F('name_rank')
+                    + F('meta_description_rank')
+                    + F('meta_title_rank') * 2
+                    + F('description_rank'),
+                    output_field=models.DecimalField(),
+                )
+            )
+            qs = qs.filter(rank__gte=0.17).order_by('depth', '-rank')
         category = qs.first()
         if category:
             return category.get_descendants_and_self()
