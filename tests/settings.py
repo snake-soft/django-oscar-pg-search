@@ -14,8 +14,9 @@ HAYSTACK_CONNECTIONS = {"default": {}}
 
 
 INSTALLED_APPS = [
-    'changelog.apps.ChangelogConfig',
-] + oscar.INSTALLED_APPS
+    'oscar_pg_search.apps.PgSearchConfig',
+] + [x for x in oscar.INSTALLED_APPS
+     if x != 'oscar.apps.search.apps.SearchConfig']
 
 
 DATABASES = {
