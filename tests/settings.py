@@ -1,13 +1,13 @@
-from pathlib import Path
+import os, pathlib, oscar
 from oscar.defaults import *
-import oscar
+
 
 SECRET_KEY = 'notverysecret'
 DEBUG = True
 ROOT_URLCONF = 'urls'
 STATIC_URL = '/static/'
 USE_TZ = True
-BASE_DIR = Path(__file__).resolve().parent.parent.parent.parent
+BASE_DIR = pathlib.Path(__file__).resolve().parent.parent.parent.parent
 
 
 HAYSTACK_CONNECTIONS = {"default": {}}
@@ -21,8 +21,12 @@ INSTALLED_APPS = [
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': 'mydatabase',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': os.environ.get('DB_NAME', 'postgres'),
+        'USER': os.environ.get('DB_USER', 'postgres'),
+        'PASSWORD': os.environ.get('DB_PASS', 'postgres'),
+        'HOST': '127.0.0.1',
+        'PORT': '5432',
     }
 }
 
