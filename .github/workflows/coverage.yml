@@ -30,8 +30,8 @@ jobs:
           pip install -e .
           pip install -r requirements.txt
           pip install coverage
-          coverage run --source='src/django-oscar-pg-search/' tests/manage.py test
-          coverage report
+          coverage run tests/manage.py test
+          coverage report --skip-empty --skip-covered -m
           coverage xml
 
       - name: "Codecov"
