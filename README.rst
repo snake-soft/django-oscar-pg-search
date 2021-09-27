@@ -1,6 +1,17 @@
+
+.. image:: https://github.com/snake-soft/django-oscar-pg-search/actions/workflows/django.yml/badge.svg
+   :target: https://github.com/snake-soft/django-oscar-pg-search/actions/workflows/django.yml
+   :alt: Maintainability
+
 .. image:: https://api.codeclimate.com/v1/badges/a289293e4e1af1114d74/maintainability
    :target: https://codeclimate.com/github/snake-soft/django-oscar-pg-search/maintainability
    :alt: Maintainability
+
+.. image:: https://codecov.io/gh/snake-soft/django-oscar-pg-search/branch/master/graph/badge.svg?token=TALCIZ5E3Q
+   :target: https://codecov.io/gh/snake-soft/django-oscar-pg-search
+
+.. image:: https://img.shields.io/badge/License-GPLv3-blue.svg
+   :target: https://www.gnu.org/licenses/gpl-3.0
 
 ==========================================
 Postgresql search handler for Django-Oscar
