@@ -4,7 +4,7 @@ on: [push, pull_request]
 
 jobs:
   test:
-    name: Python ${{ matrix.python-version }}, Django ${{ matrix.django-version }}
+    name: Oscar-${{ matrix.django-osvar-version }}
     runs-on: ubuntu-latest
     services:
       database:
