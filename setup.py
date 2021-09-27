@@ -4,8 +4,8 @@ from src.oscar_pg_search import __version__
 
 
 install_requires = [
-    'django>=2.2,<3.3',
-    'django-oscar>=3.1',
+    'django>=3.0,<3.3',
+    'django-oscar>=2.0,<3.2',
 ]
 
 tests_require = [
@@ -27,7 +27,7 @@ setup(
         'Development Status :: 4 - Beta',
         'Environment :: Web Environment',
         'Framework :: Django',
-        'Framework :: Django :: 2.2',
+        'Framework :: Django :: 3.0',
         'Framework :: Django :: 3.1',
         'Framework :: Django :: 3.2',
         'Intended Audience :: Developers',
