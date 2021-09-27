@@ -6,9 +6,8 @@ SECRET_KEY = 'notverysecret'
 DEBUG = True
 ROOT_URLCONF = 'urls'
 STATIC_URL = '/static/'
-USE_TZ = True
+USE_TZ = False
 BASE_DIR = pathlib.Path(__file__).resolve().parent.parent.parent.parent
-
 
 HAYSTACK_CONNECTIONS = {"default": {}}
 
