@@ -25,18 +25,6 @@ for facet in settings.OSCAR_SEARCH_FACETS['queries'].values():
 
 
 class OrderForm(forms.Form):
-    choice_objects = (
-        RankOrderByOption('relevancy', _('Relevancy'), '-rank'),
-        OrderByOption('newest', 'Neuste Artikel', '-date_created'),
-        OrderByOption('updated', 'Letzte Änderungen', '-date_updated'),
-        OrderByOption('title-asc', _('Title A to Z'), 'title'),
-        OrderByOption('title-desc', _('Title Z to A'), '-title'),
-    )
-    choice_objects_with_price = (
-        PriceOrderByOption('price-asc', _('Price low to high'), 'price'),
-        PriceOrderByOption('price-desc', _('Price high to low'), '-price'),
-    )
-
     sort_by = forms.ChoiceField(
         label=_("Sort by"), choices=[],
         widget=forms.Select(), required=False)
@@ -47,6 +35,58 @@ class OrderForm(forms.Form):
         self.request = request
         self.fields['sort_by'].choices = self.get_sort_by_choices()
 
+    @property
+    def choice_objects(self):
+        return [
+            RankOrderByOption(
+                self.request,
+                'relevancy',
+                _('Relevancy'),
+                '-rank',
+            ),
+            OrderByOption(
+                self.request,
+                'newest',
+                'Neuste Artikel',
+                '-date_created',
+            ),
+            OrderByOption(
+                self.request,
+                'updated',
+                'Letzte Änderungen',
+                '-date_updated',
+            ),
+            OrderByOption(
+                self.request,
+                'title-asc',
+                _('Title A to Z'),
+                'title',
+            ),
+            OrderByOption(
+                self.request,
+                'title-desc',
+                _('Title Z to A'),
+                '-title',
+            ),
+        ]
+
+    @property
+    def choice_objects_with_price(self):
+        return [
+            PriceOrderByOption(
+                self.request,
+                'price-asc',
+                _('Price low to high'),
+                'price',
+            ),
+            PriceOrderByOption(
+                self.request,
+                'price-desc',
+                _('Price high to low'),
+                '-price',
+            ),
+        ]
+
     def get_sort_by_choices(self):
         options = self.choice_objects
         if not self.request.user.hide_price:
@@ -56,7 +96,7 @@ class OrderForm(forms.Form):
     def get_sort_by(self):
         if self.is_valid():
             sort_by = self.cleaned_data.get('sort_by')
-            for choice in self.choice_objects:
+            for choice in self.choice_objects + self.choice_objects_with_price:
                 if choice.code == sort_by:
                     return choice
         return self.choice_objects[0]
