@@ -13,24 +13,22 @@ Every Filter has two use cases:
 from decimal import Decimal as D
 from django import forms
 from django.db.models import Q
+from django.conf import settings
 from oscar.core.loading import get_model
 
 RangeProduct = get_model('offer', 'RangeProduct')
+Product = get_model('catalogue', 'Product')
 ProductAttribute = get_model('catalogue', 'ProductAttribute')
+ProductAttributeValue = get_model('catalogue', 'ProductAttributeValue')
 
 
-class MultipleChoiceAttributeField(forms.MultipleChoiceField):
-    """
-    This is used as field for attribute value choices
-    If one option group is used multiple times, the name and code of the 
-    attributes needs to be the same!
-    """
+class FieldBase:
     widget = forms.SelectMultiple(attrs={'class': 'chosen-select'})
-    CONVERT_CODES = ['brand', 'vessel']
 
     def __init__(self, attribute, request, form, *args, **kwargs):
         super().__init__(label=attribute.name, required=False, *args, **kwargs)
         self.attribute = attribute
+        self.fieldname = f'value_{attribute.type}'
         self.request = request
         self.manager = form.manager
         self.form = form
@@ -40,6 +38,78 @@ class MultipleChoiceAttributeField(forms.MultipleChoiceField):
         This is running after the result was created by manager.
         """
         self.choices = self.get_choices()
+
+    @property
+    def query(self):
+        return self.get_query()
+
+    def get_query(self):
+        return NotImplementedError('Not implemented in subclass')
+
+    def get_choices(self):
+        return NotImplementedError('Not implemented in subclass')
+
+
+class TextAttributeField(FieldBase, forms.MultipleChoiceField):
+    def get_query(self):
+        if str(self.attribute.id) in self.request.GET:
+            values_list = self.request.GET.getlist(str(self.attribute.id))
+            if self.attribute.type in (self.attribute.TEXT, self.attribute.FLOAT):
+                values = self.attribute.productattributevalue_set.filter(
+                    id__in=values_list)
+                values = values.values_list(self.fieldname, flat=True)
+                query_kwargs = {
+                    f'attribute_values__{self.fieldname}__in': values,
+                }
+                return Q(**query_kwargs)
+            '''
+            values_list = self.request.GET.getlist(str(self.attribute.id))
+            values = self.attribute.productattributevalue_set.filter(id__in=values_list).values_list('value_text', flat=True)
+            return Q(attribute_values__value_text__in=values)
+            '''
+        return None
+
+    def get_choices(self):
+        """
+        get value
+        search first attribute with value
+        """
+        other_field_results_qs = self.manager.get_result(exclude=self)
+        qs = self.attribute.productattributevalue_set.filter(
+            product__in=other_field_results_qs)
+        qs = qs.order_by(self.fieldname, 'id')
+        qs = qs.distinct(self.fieldname)
+        return qs.values_list('id', self.fieldname)
+
+        '''
+        return ProductAttributeValue.objects.filter(attribute=self.attribute, product__in=other_field_results_qs).order_by('value_text', 'id').distinct('value_text').values_list('id', 'value_text')
+        if self.attribute.code=='alkoholgehalt':
+            import pdb; pdb.set_trace()  # <---------
+        ProductAttributeValue.objects.first()
+        return self.attribute.productattributevalue_set.filter(id__in=other_field_results_qs).order_by('value_text', 'id').distinct('value_text').values_list('id', self.fieldname)
+
+        return self.attribute.productattributevalue_set.distinct(self.fieldname).values_list('id', self.fieldname)
+        import pdb; pdb.set_trace()  # <---------
+        assert 118511 in other_field_results_qs.values_list('id', flat=True)
+        return self.attribute.productattributevalue_set.all().distinct(self.fieldname).values_list('id', self.fieldname)
+        #if self.attribute.type == self.attribute.TEXT:
+        qs = self.attribute.productattributevalue_set.filter(
+            product__in=other_field_results_qs)
+        #qs = qs.distinct(self.fieldname)
+        import pdb; pdb.set_trace()  # <---------
+        values = qs.values_list(self.fieldname, flat=True)
+        qs = qs.filter(**{f'{self.fieldname}__in': values})
+        return qs.values_list('id', self.fieldname)
+        '''
+
+
+class MultipleChoiceAttributeField(FieldBase, forms.MultipleChoiceField):
+    """
+    This is used as field for attribute value choices
+    If one option group is used multiple times, the name and code of the 
+    attributes needs to be the same!
+    """
+    CONVERT_CODES = ['brand', 'vessel']
 
     def __get_value_ids(self):
         """
@@ -53,14 +123,19 @@ class MultipleChoiceAttributeField(forms.MultipleChoiceField):
             result = self.request.GET.getlist(str(self.attribute.id))
         return result
 
-    @property
-    def query(self):
+    def get_query(self):
         """
         :returns: Query for filtering the attribute_values mathching this field
         """
         values_ids = self.__get_value_ids()
-        return Q(attribute_values__value_option_id__in=values_ids) \
-            if values_ids else None
+        if not values_ids:
+            return None
+        if self.attribute.type == 'option':
+            return Q(attribute_values__value_option_id__in=values_ids)
+        elif self.attribute.type == 'multi_option':
+            return Q(attribute_values__value_multi_option__id__in=values_ids)
+        else:
+            raise AttributeError('Wrong attribute type for this class')
 
     def get_choices(self):
         """
@@ -69,19 +144,25 @@ class MultipleChoiceAttributeField(forms.MultipleChoiceField):
         possible options by the current result.
         """
         other_field_results_qs = self.manager.get_result(exclude=self)
-        qs = self.attribute.option_group.options.filter(
-            productattributevalue__product__in=other_field_results_qs,
-        )
-        qs = qs.order_by('option')
-        qs = qs.distinct('option')
-        return qs.values_list('id', 'option')
+        if self.attribute.type == 'option':
+            qs = self.attribute.option_group.options.filter(
+                productattributevalue__product__in=other_field_results_qs,
+            )
+            qs = qs.order_by('option')
+            qs = qs.distinct('option')
+            return qs.values_list('id', 'option')
+        elif self.attribute.type == 'multi_option':
+            qs = self.attribute.option_group.options.filter(
+                multi_valued_attribute_values__product__in=other_field_results_qs
+            )
+            qs = qs.distinct()
+            qs = qs.order_by('option')
+            return qs.values_list('id', 'option')
+        else:
+            raise AttributeError('Wrong attribute type for this class')
 
 
-class MultipleChoiceProductField(forms.MultipleChoiceField):
-    """
-    This field is for weight and volume. They are attached directly to the
-    Product.
-    """
+class ProductFieldBase:
     widget = forms.SelectMultiple(attrs={'class': 'chosen-select'})
 
     def __init__(self, code, request, form, label_funct, *args, **kwargs):
@@ -99,6 +180,21 @@ class MultipleChoiceProductField(forms.MultipleChoiceField):
 
     @property
     def query(self):
+        return self.get_query()
+
+    def get_query(self):
+        return NotImplementedError('Not implemented in subclass')
+
+    def get_choices(self):
+        return NotImplementedError('Not implemented in subclass')
+
+
+class MultipleChoiceProductField(ProductFieldBase, forms.MultipleChoiceField):
+    """
+    This field is for weight and volume. They are attached directly to the
+    Product.
+    """
+    def get_query(self):
         """ This is the attribute values query if this option is selected """
         option_ids = self.request.GET.getlist(self.code)
         return Q(**{f'{self.code}__in': option_ids}) if option_ids else None
@@ -117,6 +213,26 @@ class MultipleChoiceProductField(forms.MultipleChoiceField):
                 result.append((option, self.label_funct(option)))
         return sorted(result)
 
+
+class ForeignKeyProductField(ProductFieldBase, forms.MultipleChoiceField):
+    widget = forms.SelectMultiple(attrs={'class': 'chosen-select'})
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.model_field = Product._meta.get_field(self.code)
+        self.related_name = self.model_field.related_query_name()
+
+    def get_query(self):
+        option_ids = self.request.GET.getlist(self.code)
+        return Q(**{f'{self.model_field.name}__id__in': option_ids}) if option_ids else None
+
+    def get_choices(self):
+        result_for_other = self.manager.get_result(exclude=self)
+        model = self.model_field.related_model
+
+        qs_kwargs = {f'{self.related_name}__in': result_for_other}
+        qs = model.objects.filter(**qs_kwargs).distinct()
+        return sorted([(x.id, str(x)) for x in qs], key=lambda x: x[1])
 
 class BooleanOfferField(forms.BooleanField):
     """
@@ -176,6 +292,9 @@ class ProductFilter(forms.Form):
     - MultipleChoiceProductField for product attached data (weight, volume)
     - BooleanOfferField for filtering offers only
     """
+    enabled_attributes = getattr(settings, 'OSCAR_ENABLED_ATTRIBUTES', None)
+    enabled_attached_fields = getattr(
+        settings, 'OSCAR_SEARCH_ENABLED_FIELDS', [])
     name = 'Filter'
     code = 'filter'
     product_field_codes = (
@@ -214,10 +333,10 @@ class ProductFilter(forms.Form):
         fields = {}
 
         def _volume_str(value):
-            return f'{value}l'
+            return f'{float(value)}l'
 
         fields['volume'] = MultipleChoiceProductField(
-            'volume', self.request, self, _volume_str, label='Volumen')
+            'volume', self.request, self, _volume_str)#, label='Volumen')
 
         def _weight_str(value):
             return '{}{}'.format(
@@ -225,7 +344,18 @@ class ProductFilter(forms.Form):
                 'g' if value < 1 else 'kg',)
 
         fields['weight'] = MultipleChoiceProductField(
-            'weight', self.request, self, _weight_str, label='Gewicht')
+            'weight', self.request, self, _weight_str)#, label='Gewicht')
+
+        for field_name in self.enabled_attached_fields:
+            model_field = Product._meta.get_field(field_name)
+
+            if model_field.get_internal_type() == 'ForeignKey':
+                def _fk_str(value):
+                    import pdb; pdb.set_trace()  # <---------
+    
+                label = model_field.related_model._meta.verbose_name
+                fields[field_name] = ForeignKeyProductField(
+                    field_name, self.request, self, _fk_str)
 
         return fields
 
@@ -251,7 +381,17 @@ class ProductFilter(forms.Form):
             'name', 'option_group_id'
         )
         for attribute in all_attributes_from_qs:
-            field = MultipleChoiceAttributeField(attribute, self.request, self)
+            if self.enabled_attributes \
+                    and attribute.code not in self.enabled_attributes:
+                continue
+
+            if attribute.type in (attribute.TEXT, attribute.FLOAT):
+                field = TextAttributeField(attribute, self.request, self)
+            elif attribute.type in (attribute.OPTION, attribute.MULTI_OPTION):
+                field = MultipleChoiceAttributeField(
+                    attribute, self.request, self)
+            else:
+                raise NotImplementedError('Other fields need to be created')
             fields[str(attribute.id)] = field
         return fields
 
