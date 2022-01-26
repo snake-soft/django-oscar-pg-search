@@ -57,8 +57,10 @@ class PostgresSearchHandler(SimpleProductSearchHandler):
             return settings.OSCAR_PRODUCTS_PER_PAGE_AJAX
         return settings.OSCAR_PRODUCTS_PER_PAGE
 
-    def get_queryset(self, unfiltered=False):
-        if hasattr(Product, 'for_user'):
+    def get_queryset(self):
+        if hasattr(self.request, 'products'):
+            qs = self.request.products
+        elif hasattr(Product, 'for_user'):
             qs = Product.for_user(self.request.user)
         else:
             qs = Product.objects.browsable()
