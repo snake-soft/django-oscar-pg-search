@@ -14,6 +14,8 @@ from decimal import Decimal as D
 from django import forms
 from django.db.models import Q
 from django.conf import settings
+from django.urls.base import reverse
+from django.utils.translation import gettext_lazy as _
 from oscar.core.loading import get_model
 
 RangeProduct = get_model('offer', 'RangeProduct')
@@ -302,12 +304,13 @@ class ProductFilter(forms.Form):
         ('weight', '{}kg'),
     )
 
-    def __init__(self, request, manager, qs, *args, **kwargs):
+    def __init__(self, request, manager, qs, *args, disabled_fields=None,
+                 **kwargs):
         self.manager = manager
         self.request = request
         self.qs = qs
         super().__init__(request.GET, *args, **kwargs)
-        self.fields = self.get_fields()
+        self.fields = self.get_fields(disabled_fields)
 
     def initialize(self):
         """
@@ -395,7 +398,7 @@ class ProductFilter(forms.Form):
             fields[str(attribute.id)] = field
         return fields
 
-    def get_fields(self):
+    def get_fields(self, disabled_fields):
         """
         :returns: Resorted fields containing the new created.
         """
@@ -405,6 +408,9 @@ class ProductFilter(forms.Form):
             **self.fields,
             **self.get_attribute_fields(),
         }
+        for disabled_field in disabled_fields:
+            if disabled_field in fields:
+                fields.pop(disabled_field)
         return fields
 
     @property
@@ -429,23 +435,44 @@ class UserFilter(forms.Form):
     name = 'Mein Shop'
     code = 'user'
 
-    wishlist = forms.MultipleChoiceField(
-        label='Favoritenlisten',
-        widget=forms.SelectMultiple(attrs={'class': 'chosen-select'}),
-        required=False,
-    )
-
-    order = forms.MultipleChoiceField(
-        label='Vorherige Bestellungen',
-        widget=forms.SelectMultiple(attrs={'class': 'chosen-select'}),
-        required=False,
-    )
-
-    def __init__(self, request, manager, qs, *args, **kwargs):
+    def __init__(self, request, manager, qs, *args, disabled_fields=None,
+                 **kwargs):
+        self.disabled_fields = disabled_fields or []
         self.manager = manager
+        self.wishlist_as_link = manager.wishlist_as_link
         self.request = request
         self.qs = qs
         super().__init__(request.GET, *args, **kwargs)
+        self.fields = self.get_fields(disabled_fields)
+
+    def get_fields(self, disabled_fields):
+        fields = {}
+        if self.wishlist_as_link:
+            url = reverse('customer:wishlists-list')
+            onchange_js = 'var key = $(this).val(); window.location.replace'\
+                f'("{url}" + key);'
+            fields['wishlist'] = forms.MultipleChoiceField(
+                label='Favoritenlisten',
+                widget=forms.Select(
+                    attrs={'onchange': onchange_js}),
+                required=False,
+            )
+        else:
+            fields['wishlist'] = forms.MultipleChoiceField(
+                label='Favoritenlisten',
+                widget=forms.SelectMultiple(attrs={'class': 'chosen-select'}),
+                required=False,
+            )
+
+        fields['order'] = forms.MultipleChoiceField(
+            label='Vorherige Bestellungen',
+            widget=forms.SelectMultiple(attrs={'class': 'chosen-select'}),
+            required=False,
+        )
+        for disabled_field in disabled_fields:
+            if disabled_field in fields:
+                fields.pop(disabled_field)
+        return fields
 
     def initialize(self):
         """
@@ -457,8 +484,11 @@ class UserFilter(forms.Form):
             self.fields = {}
             return None
 
-        self.fields['wishlist'].choices = self.get_wishlist_choices()
-        self.fields['order'].choices = self.get_order_choices()
+        if 'wishlist' in self.fields:
+            self.fields['wishlist'].choices = self.get_wishlist_choices()
+
+        if 'order' in self.fields:
+            self.fields['order'].choices = self.get_order_choices()
         result = self.is_valid()
         self._errors = {}
         return result
@@ -467,6 +497,11 @@ class UserFilter(forms.Form):
         """
         :returns: All wishlists of request user as choices.
         """
+        if self.wishlist_as_link:
+            return [
+                ('', _('zur Liste springen')),
+                *self.request.user.wishlists.values_list('key', 'name')
+            ]
         return self.request.user.wishlists.values_list('id', 'name')
 
     def get_order_choices(self):
