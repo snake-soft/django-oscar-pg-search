@@ -64,11 +64,6 @@ class TextAttributeField(FieldBase, forms.MultipleChoiceField):
                     f'attribute_values__{self.fieldname}__in': values,
                 }
                 return Q(**query_kwargs)
-            '''
-            values_list = self.request.GET.getlist(str(self.attribute.id))
-            values = self.attribute.productattributevalue_set.filter(id__in=values_list).values_list('value_text', flat=True)
-            return Q(attribute_values__value_text__in=values)
-            '''
         return None
 
     def get_choices(self):
@@ -82,27 +77,6 @@ class TextAttributeField(FieldBase, forms.MultipleChoiceField):
         qs = qs.order_by(self.fieldname, 'id')
         qs = qs.distinct(self.fieldname)
         return qs.values_list('id', self.fieldname)
-
-        '''
-        return ProductAttributeValue.objects.filter(attribute=self.attribute, product__in=other_field_results_qs).order_by('value_text', 'id').distinct('value_text').values_list('id', 'value_text')
-        if self.attribute.code=='alkoholgehalt':
-            import pdb; pdb.set_trace()  # <---------
-        ProductAttributeValue.objects.first()
-        return self.attribute.productattributevalue_set.filter(id__in=other_field_results_qs).order_by('value_text', 'id').distinct('value_text').values_list('id', self.fieldname)
-
-        return self.attribute.productattributevalue_set.distinct(self.fieldname).values_list('id', self.fieldname)
-        import pdb; pdb.set_trace()  # <---------
-        assert 118511 in other_field_results_qs.values_list('id', flat=True)
-        return self.attribute.productattributevalue_set.all().distinct(self.fieldname).values_list('id', self.fieldname)
-        #if self.attribute.type == self.attribute.TEXT:
-        qs = self.attribute.productattributevalue_set.filter(
-            product__in=other_field_results_qs)
-        #qs = qs.distinct(self.fieldname)
-        import pdb; pdb.set_trace()  # <---------
-        values = qs.values_list(self.fieldname, flat=True)
-        qs = qs.filter(**{f'{self.fieldname}__in': values})
-        return qs.values_list('id', self.fieldname)
-        '''
 
 
 class MultipleChoiceAttributeField(FieldBase, forms.MultipleChoiceField):
@@ -339,7 +313,7 @@ class ProductFilter(forms.Form):
             return f'{float(value)}l'
 
         fields['volume'] = MultipleChoiceProductField(
-            'volume', self.request, self, _volume_str)#, label='Volumen')
+            'volume', self.request, self, _volume_str, label='Volumen')
 
         def _weight_str(value):
             return '{}{}'.format(
@@ -347,14 +321,14 @@ class ProductFilter(forms.Form):
                 'g' if value < 1 else 'kg',)
 
         fields['weight'] = MultipleChoiceProductField(
-            'weight', self.request, self, _weight_str)#, label='Gewicht')
+            'weight', self.request, self, _weight_str, label='Gewicht')
 
         for field_name in self.enabled_attached_fields:
             model_field = Product._meta.get_field(field_name)
 
             if model_field.get_internal_type() == 'ForeignKey':
                 def _fk_str(value):
-                    import pdb; pdb.set_trace()  # <---------
+                    raise NotImplementedError('Need to fix fk name here')
     
                 label = model_field.related_model._meta.verbose_name
                 fields[field_name] = ForeignKeyProductField(
