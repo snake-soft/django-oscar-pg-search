@@ -11,6 +11,7 @@ Every Filter has two use cases:
 - Filter the QuerySet when the Form is posted
 """
 from decimal import Decimal as D
+from collections import OrderedDict
 from django import forms
 from django.db.models import Q
 from django.conf import settings
@@ -141,12 +142,22 @@ class MultipleChoiceAttributeField(FieldBase, forms.MultipleChoiceField):
 class ProductFieldBase:
     widget = forms.SelectMultiple(attrs={'class': 'chosen-select'})
 
-    def __init__(self, code, request, form, label_funct, *args, **kwargs):
+    def __init__(self, code, request, form, *args, **kwargs):
         super().__init__(required=False, *args, **kwargs)
         self.request = request
         self.manager = form.manager
-        self.label_funct = label_funct
         self.code = code
+        self.field = Product.get_field(code)
+        self.label = Product.get_field_label(self.field)
+
+    def clean_value(self, value):
+        clean_func = {
+            'weight': lambda x: '{}{}'.format(
+                (x * 1000).quantize(1) if x < 1 else x, 'g' if x < 1 else 'kg',
+            ),
+            'volume': lambda x: f'{float(x)}l',
+        }.get(self.code, lambda x: x)
+        return clean_func(value)
 
     def initialize(self):
         """
@@ -181,12 +192,22 @@ class MultipleChoiceProductField(ProductFieldBase, forms.MultipleChoiceField):
         """
         result_for_other = self.manager.get_result(exclude=self)
         options = set(result_for_other.values_list(self.code, flat=True))
+
+        if self.field.choices:
+            choices = [x for x in self.field.choices if x[0] in options]
+            return choices
+
+        if self.field.related_model:
+            qs = self.field.related_model.objects.filter(pk__in=options)
+            options = [(x.pk, str(x)) for x in qs]
+            return sorted(options, key=lambda x: x[1])
+
         result = []
         for option in options:
             if option:
                 if isinstance(option, D):
                     option = option.normalize()
-                result.append((option, self.label_funct(option)))
+                result.append((option, self.clean_value(option)))
         return sorted(result)
 
 
@@ -209,6 +230,7 @@ class ForeignKeyProductField(ProductFieldBase, forms.MultipleChoiceField):
         qs_kwargs = {f'{self.related_name}__in': result_for_other}
         qs = model.objects.filter(**qs_kwargs).distinct()
         return sorted([(x.id, str(x)) for x in qs], key=lambda x: x[1])
+
 
 class BooleanOfferField(forms.BooleanField):
     """
@@ -268,23 +290,16 @@ class ProductFilter(forms.Form):
     - MultipleChoiceProductField for product attached data (weight, volume)
     - BooleanOfferField for filtering offers only
     """
-    enabled_attributes = getattr(settings, 'OSCAR_ENABLED_ATTRIBUTES', None)
-    enabled_attached_fields = getattr(
-        settings, 'OSCAR_SEARCH_ENABLED_FIELDS', [])
     name = 'Filter'
     code = 'filter'
-    product_field_codes = (
-        ('volume', '{}l'),
-        ('weight', '{}kg'),
-    )
+    disabled_fields = getattr(settings, 'OSCAR_SEARCH_DISABLED_FIELDS', [])
 
-    def __init__(self, request, manager, qs, *args, disabled_fields=None,
-                 **kwargs):
+    def __init__(self, request, manager, qs, *args, **kwargs):
         self.manager = manager
         self.request = request
         self.qs = qs
         super().__init__(request.GET, *args, **kwargs)
-        self.fields = self.get_fields(disabled_fields)
+        self.fields = self.get_fields()
 
     def initialize(self):
         """
@@ -303,37 +318,18 @@ class ProductFilter(forms.Form):
             del self.fields[fieldname]
         return result
 
+    @property
+    def enabled_attached_fields(self):
+        codes = getattr(settings, 'OSCAR_ATTACHED_PRODUCT_FIELDS', [])
+        return [x for x in codes if x not in self.disabled_fields]
+
     def get_product_fields(self):
         """
         :returns: Newly created MultipleChoiceProductField's (volume, weight)
         """
         fields = {}
-
-        def _volume_str(value):
-            return f'{float(value)}l'
-
-        fields['volume'] = MultipleChoiceProductField(
-            'volume', self.request, self, _volume_str, label='Volumen')
-
-        def _weight_str(value):
-            return '{}{}'.format(
-                (value * 1000).quantize(1) if value < 1 else value,
-                'g' if value < 1 else 'kg',)
-
-        fields['weight'] = MultipleChoiceProductField(
-            'weight', self.request, self, _weight_str, label='Gewicht')
-
-        for field_name in self.enabled_attached_fields:
-            model_field = Product._meta.get_field(field_name)
-
-            if model_field.get_internal_type() == 'ForeignKey':
-                def _fk_str(value):
-                    raise NotImplementedError('Need to fix fk name here')
-    
-                label = model_field.related_model._meta.verbose_name
-                fields[field_name] = ForeignKeyProductField(
-                    field_name, self.request, self, _fk_str)
-
+        for code in self.enabled_attached_fields:
+            fields[code] = MultipleChoiceProductField(code, self.request, self)
         return fields
 
     def get_offer_field(self):
@@ -345,19 +341,21 @@ class ProductFilter(forms.Form):
             return {'offer_only': field}
         return {}
 
+    @property
+    def enabled_attributes(self):
+        codes = ProductAttribute.objects.values_list('code', flat=True)
+        return {x for x in codes if x not in self.disabled_fields}
+
     def get_attribute_fields(self):
         """
         :returns: MultipleChoiceAttributeField for dynamic attribute values
         """
         fields = {}
-        all_attributes_from_qs = ProductAttribute.objects.filter(
-            productattributevalue__product__in=self.qs
-        ).order_by(
-            'name', 'option_group_id'
-        ).distinct(
-            'name', 'option_group_id'
-        )
-        for attribute in all_attributes_from_qs:
+        qs = ProductAttribute.objects.exclude(code__in=self.disabled_fields)
+        qs = qs.filter(productattributevalue__product__in=self.qs)
+        qs = qs.order_by('name', 'option_group_id')
+        qs = qs.distinct('name', 'option_group_id')
+        for attribute in qs:
             if self.enabled_attributes \
                     and attribute.code not in self.enabled_attributes:
                 continue
@@ -372,19 +370,16 @@ class ProductFilter(forms.Form):
             fields[str(attribute.id)] = field
         return fields
 
-    def get_fields(self, disabled_fields):
+    def get_fields(self):
         """
         :returns: Resorted fields containing the new created.
         """
-        fields = {
+        fields = OrderedDict(
             **self.get_offer_field(),
             **self.get_product_fields(),
             **self.fields,
             **self.get_attribute_fields(),
-        }
-        for disabled_field in disabled_fields:
-            if disabled_field in fields:
-                fields.pop(disabled_field)
+        )
         return fields
 
     @property
@@ -408,18 +403,17 @@ class UserFilter(forms.Form):
     """
     name = 'Mein Shop'
     code = 'user'
+    disabled_fields = getattr(settings, 'OSCAR_SEARCH_DISABLED_FIELDS', [])
 
-    def __init__(self, request, manager, qs, *args, disabled_fields=None,
-                 **kwargs):
-        self.disabled_fields = disabled_fields or []
+    def __init__(self, request, manager, qs, *args, **kwargs):
         self.manager = manager
         self.wishlist_as_link = manager.wishlist_as_link
         self.request = request
         self.qs = qs
         super().__init__(request.GET, *args, **kwargs)
-        self.fields = self.get_fields(disabled_fields)
+        self.fields = self.get_fields()
 
-    def get_fields(self, disabled_fields):
+    def get_fields(self):
         fields = {}
         if self.wishlist_as_link:
             url = reverse('customer:wishlists-list')
@@ -443,9 +437,6 @@ class UserFilter(forms.Form):
             widget=forms.SelectMultiple(attrs={'class': 'chosen-select'}),
             required=False,
         )
-        for disabled_field in disabled_fields:
-            if disabled_field in fields:
-                fields.pop(disabled_field)
         return fields
 
     def initialize(self):

@@ -11,11 +11,7 @@ class FilterManager:
     fltr_cls = FILTERS
     wishlist_as_link = False
 
-    def __init__(self, request, qs, disabled_fields=None,
-                 disabled_filters=None):
-        self.disabled_filters = disabled_filters or []
-        self.disabled_fields = disabled_fields or []
-
+    def __init__(self, request, qs):
         self.request = request
         self.qs = qs
 
@@ -33,10 +29,8 @@ class FilterManager:
         """
         fltrs = []
         for _cls in self.fltr_cls:
-            if _cls.code not in self.disabled_filters:
-                fltr = _cls(self.request, self, self.qs,
-                            disabled_fields=self.disabled_fields)
-                fltrs.append(fltr)
+            fltr = _cls(self.request, self, self.qs)
+            fltrs.append(fltr)
         return fltrs
 
     def get_queries(self, exclude=None):
