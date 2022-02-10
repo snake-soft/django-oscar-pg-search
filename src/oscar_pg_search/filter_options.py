@@ -20,6 +20,7 @@ from django.utils.translation import gettext_lazy as _
 from oscar.core.loading import get_model
 
 RangeProduct = get_model('offer', 'RangeProduct')
+ConditionalOffer = get_model('offer', 'ConditionalOffer')
 Product = get_model('catalogue', 'Product')
 ProductAttribute = get_model('catalogue', 'ProductAttribute')
 ProductAttributeValue = get_model('catalogue', 'ProductAttributeValue')
@@ -191,24 +192,30 @@ class MultipleChoiceProductField(ProductFieldBase, forms.MultipleChoiceField):
         :returns: Choices drilled down by result query of all other fields.
         """
         result_for_other = self.manager.get_result(exclude=self)
-        options = set(result_for_other.values_list(self.code, flat=True))
 
         if self.field.choices:
+            qs = result_for_other.order_by(self.code)
+            qs = qs.distinct(self.code)
+            options = qs.values_list(self.code, flat=True)
             choices = [x for x in self.field.choices if x[0] in options]
             return choices
 
         if self.field.related_model:
-            qs = self.field.related_model.objects.filter(pk__in=options)
+            option_qs = result_for_other.order_by().distinct(self.code)
+            values = option_qs.values_list(self.code, flat=True)
+            qs = self.field.related_model.objects.filter(pk__in=values)
             options = [(x.pk, str(x)) for x in qs]
             return sorted(options, key=lambda x: x[1])
 
+        qs = result_for_other.order_by(self.code).distinct(self.code)
+        options = qs.values_list(self.code, flat=True)
         result = []
         for option in options:
             if option:
                 if isinstance(option, D):
                     option = option.normalize()
                 result.append((option, self.clean_value(option)))
-        return sorted(result)
+        return result
 
 
 class ForeignKeyProductField(ProductFieldBase, forms.MultipleChoiceField):
@@ -260,17 +267,24 @@ class BooleanOfferField(forms.BooleanField):
         :returns: True if there are range products for this user in the result
         """
         result_for_other = self.manager.get_result(exclude=self)
-        return result_for_other.filter(
-            rangeproduct__in=self.get_range_products()
-        ).exists()
+        range_products = self.get_range_products()
+        return result_for_other.filter(rangeproduct__in=range_products).exists()
 
     def get_range_products(self):
         """
         :returns: All range products for the request user.
         """
+        offers = ConditionalOffer.active.all()
+        if hasattr(self.request, 'partners'):
+            qs = RangeProduct.objects.filter(
+                range__condition__offers__in=offers,
+                partner__in=self.request.partners)
+            return qs
+
         if hasattr(RangeProduct, 'for_user'):
             return RangeProduct.for_user(self.request.user)  # @UndefinedVariable
-        return RangeProduct.active_special_prices.all()
+
+        return RangeProduct.objects.filter(condition__range__in=offers)
 
     @property
     def query(self):
