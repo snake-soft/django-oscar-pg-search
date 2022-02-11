@@ -274,11 +274,11 @@ class BooleanOfferField(forms.BooleanField):
         """
         :returns: All range products for the request user.
         """
-        offers = ConditionalOffer.active.all()
         if hasattr(self.request, 'partners'):
-            qs = RangeProduct.objects.filter(
-                range__condition__offers__in=offers,
+            offers = ConditionalOffer.active.filter(
                 partner__in=self.request.partners)
+            qs = RangeProduct.objects.filter(
+                range__condition__offers__in=offers)
             return qs
 
         if hasattr(RangeProduct, 'for_user'):
