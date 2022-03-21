@@ -26,10 +26,9 @@ class SearchViewMixin:
                 user=self.request.user, query=self.request.GET.get('q'))
         return context
 
-    def get_search_handler(self, *args, attributes=None, **kwargs):
+    def get_search_handler(self, *args, **kwargs):
         """ Need request in the search handler """
         search_handler_class = import_string(
             settings.OSCAR_PRODUCT_SEARCH_HANDLER
         )
-        return search_handler_class(
-            self.request, *args, attributes=attributes, **kwargs)
+        return search_handler_class(self.request, *args, **kwargs)
