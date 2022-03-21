@@ -357,7 +357,10 @@ class ProductFilter(forms.Form):
 
     @property
     def enabled_attributes(self):
-        codes = ProductAttribute.objects.values_list('code', flat=True)
+        qs = ProductAttribute.objects.all()
+        if ProductAttribute._meta.get_field('filter_enabled'):
+            qs = qs.filter(filter_enabled=True)
+        codes = qs.values_list('code', flat=True)
         return {x for x in codes if x not in self.disabled_fields}
 
     def get_attribute_fields(self):
