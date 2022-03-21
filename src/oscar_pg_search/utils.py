@@ -11,9 +11,10 @@ class FilterManager:
     fltr_cls = FILTERS
     wishlist_as_link = False
 
-    def __init__(self, request, qs):
+    def __init__(self, request, qs, attributes, **kwargs):
         self.request = request
         self.qs = qs
+        self.attributes = attributes
 
         # Domain specific logic for creating Partner based options:
         if hasattr(request, 'partners'):
