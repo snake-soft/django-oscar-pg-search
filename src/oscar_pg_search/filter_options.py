@@ -310,7 +310,6 @@ class ProductFilter(forms.Form):
 
     def __init__(self, request, manager, qs, *args, **kwargs):
         self.manager = manager
-        self.attributes = manager.attributes
         self.request = request
         self.qs = qs
         super().__init__(request.GET, *args, **kwargs)
@@ -358,7 +357,7 @@ class ProductFilter(forms.Form):
 
     @property
     def enabled_attributes(self):
-        codes = self.attributes.values_list('code', flat=True)
+        codes = ProductAttribute.objects.values_list('code', flat=True)
         return {x for x in codes if x not in self.disabled_fields}
 
     def get_attribute_fields(self):
@@ -366,7 +365,7 @@ class ProductFilter(forms.Form):
         :returns: MultipleChoiceAttributeField for dynamic attribute values
         """
         fields = {}
-        qs = self.attributes.exclude(code__in=self.disabled_fields)
+        qs = ProductAttribute.objects.exclude(code__in=self.disabled_fields)
         qs = qs.filter(productattributevalue__product__in=self.qs)
         qs = qs.order_by('name', 'option_group_id')
         qs = qs.distinct('name', 'option_group_id')
