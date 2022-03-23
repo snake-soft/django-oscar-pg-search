@@ -369,6 +369,8 @@ class ProductFilter(forms.Form):
         """
         fields = {}
         qs = ProductAttribute.objects.exclude(code__in=self.disabled_fields)
+        if ProductAttribute._meta.get_field('filter_enabled'):
+            qs = qs.filter(filter_enabled=True)
         qs = qs.filter(productattributevalue__product__in=self.qs)
         qs = qs.order_by('name', 'option_group_id')
         qs = qs.distinct('name', 'option_group_id')
