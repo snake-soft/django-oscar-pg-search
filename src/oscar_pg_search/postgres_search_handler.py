@@ -118,6 +118,13 @@ class PostgresSearchHandler(SimpleProductSearchHandler):
             else:
                 raise NotImplementedError('Create fallback for non postgres db')
         if query_string:
+            exact_query = Q(upc=query_string)
+            if hasattr(Product, 'gtins'):
+                exact_query |= Q(gtins__gtin=query_string)
+            exact_qs = qs.filter(exact_query)
+            if exact_qs.exists():
+                return exact_qs
+
             qs = qs.annotate(
                 upc_rank=Coalesce(
                     TrigramSimilarity('upc', query_string), 0,
