@@ -11,25 +11,25 @@ class FilterManager:
     fltr_cls = FILTERS
     wishlist_as_link = False
 
-    def __init__(self, request, qs):
-        self.request = request
+    def __init__(self, request_data, qs, request=None):
+        self.request_data = request_data
         self.qs = qs
 
         # Domain specific logic for creating Partner based options:
-        if hasattr(request, 'partners'):
+        if request and hasattr(request, 'partners'):
             main_partner = getattr(request, 'partners')[0]
             self.wishlist_as_link = main_partner.wishlist_as_link
-        self.filters = self.get_filters()
+        self.filters = self.get_filters(request=request)
         self.result = self.get_result()
         self.initialize_filters()
 
-    def get_filters(self):
+    def get_filters(self, **kwargs):
         """
         :returns: All filter instances
         """
         fltrs = []
         for _cls in self.fltr_cls:
-            fltr = _cls(self.request, self, self.qs)
+            fltr = _cls(self.request_data, self, self.qs, **kwargs)
             fltrs.append(fltr)
         return fltrs
 

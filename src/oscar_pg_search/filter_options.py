@@ -26,16 +26,15 @@ ProductAttribute = get_model('catalogue', 'ProductAttribute')
 ProductAttributeValue = get_model('catalogue', 'ProductAttributeValue')
 
 
-class FieldBase:
+class MultipleChoiceFieldBase(forms.MultipleChoiceField):
     widget = forms.SelectMultiple(attrs={'class': 'chosen-select'})
 
-    def __init__(self, attribute, request, form, *args, **kwargs):
-        super().__init__(label=attribute.name, required=False, *args, **kwargs)
-        self.attribute = attribute
-        self.fieldname = f'value_{attribute.type}'
-        self.request = request
+    def __init__(self, request_data, form, *args, request=None, **kwargs):
+        super().__init__(required=False, *args, **kwargs)
+        self.request_data = request_data
         self.manager = form.manager
         self.form = form
+        self.request = request
 
     def initialize(self):
         """
@@ -54,10 +53,17 @@ class FieldBase:
         return NotImplementedError('Not implemented in subclass')
 
 
-class TextAttributeField(FieldBase, forms.MultipleChoiceField):
+class AttributeFieldBase(MultipleChoiceFieldBase):
+    def __init__(self, attribute, *args, **kwargs):
+        super().__init__(*args, label=attribute.name, **kwargs)
+        self.attribute = attribute
+        self.fieldname = f'value_{attribute.type}'
+
+
+class TextAttributeField(AttributeFieldBase):
     def get_query(self):
-        if str(self.attribute.id) in self.request.GET:
-            values_list = self.request.GET.getlist(str(self.attribute.id))
+        if str(self.attribute.id) in self.request_data:
+            values_list = self.request_data.getlist(str(self.attribute.id))
             if self.attribute.type in (self.attribute.TEXT, self.attribute.FLOAT):
                 values = self.attribute.productattributevalue_set.filter(
                     id__in=values_list)
@@ -81,7 +87,7 @@ class TextAttributeField(FieldBase, forms.MultipleChoiceField):
         return qs.values_list('id', self.fieldname)
 
 
-class MultipleChoiceAttributeField(FieldBase, forms.MultipleChoiceField):
+class MultipleChoiceAttributeField(AttributeFieldBase):
     """
     This is used as field for attribute value choices
     If one option group is used multiple times, the name and code of the 
@@ -95,10 +101,10 @@ class MultipleChoiceAttributeField(FieldBase, forms.MultipleChoiceField):
         Consider as deprecated.
         """
         if self.attribute.code in self.CONVERT_CODES \
-                and self.attribute.code in self.request.GET:
-            result = self.request.GET.getlist(self.attribute.code)
+                and self.attribute.code in self.request_data:
+            result = self.request_data.getlist(self.attribute.code)
         else:
-            result = self.request.GET.getlist(str(self.attribute.id))
+            result = self.request_data.getlist(str(self.attribute.id))
         return result
 
     def get_query(self):
@@ -140,13 +146,9 @@ class MultipleChoiceAttributeField(FieldBase, forms.MultipleChoiceField):
             raise AttributeError('Wrong attribute type for this class')
 
 
-class ProductFieldBase:
-    widget = forms.SelectMultiple(attrs={'class': 'chosen-select'})
-
-    def __init__(self, code, request, form, *args, **kwargs):
-        super().__init__(required=False, *args, **kwargs)
-        self.request = request
-        self.manager = form.manager
+class ProductFieldBase(MultipleChoiceFieldBase):
+    def __init__(self, code, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         self.code = code
         self.field = Product.get_field(code)
         self.label = Product.get_field_label(self.field)
@@ -177,14 +179,14 @@ class ProductFieldBase:
         return NotImplementedError('Not implemented in subclass')
 
 
-class MultipleChoiceProductField(ProductFieldBase, forms.MultipleChoiceField):
+class MultipleChoiceProductField(ProductFieldBase):
     """
     This field is for weight and volume. They are attached directly to the
     Product.
     """
     def get_query(self):
         """ This is the attribute values query if this option is selected """
-        option_ids = self.request.GET.getlist(self.code)
+        option_ids = self.request_data.getlist(self.code)
         return Q(**{f'{self.code}__in': option_ids}) if option_ids else None
 
     def get_choices(self):
@@ -218,7 +220,7 @@ class MultipleChoiceProductField(ProductFieldBase, forms.MultipleChoiceField):
         return result
 
 
-class ForeignKeyProductField(ProductFieldBase, forms.MultipleChoiceField):
+class ForeignKeyProductField(ProductFieldBase):
     widget = forms.SelectMultiple(attrs={'class': 'chosen-select'})
 
     def __init__(self, *args, **kwargs):
@@ -227,7 +229,7 @@ class ForeignKeyProductField(ProductFieldBase, forms.MultipleChoiceField):
         self.related_name = self.model_field.related_query_name()
 
     def get_query(self):
-        option_ids = self.request.GET.getlist(self.code)
+        option_ids = self.request_data.getlist(self.code)
         return Q(**{f'{self.model_field.name}__id__in': option_ids}) if option_ids else None
 
     def get_choices(self):
@@ -243,17 +245,18 @@ class BooleanOfferField(forms.BooleanField):
     """
     Field that is only used for the 'Offer only' filter.
     """
-    def __init__(self, request, form, *args, **kwargs):
+    def __init__(self, request_data, form, *args, request=None, **kwargs):
         super().__init__(label='Nur Angebote', required=False, *args, **kwargs)
         self.widget.attrs={
             'onchange': 'submitFilterForm(this.form);',
             'class': 'mt-3',
         }
         self.code = 'offer_only'
-        self.request = request
+        self.request_data = request_data
         self.manager = form.manager
         self.form = form
         self.choices = None
+        self.request = request
 
     def initialize(self):
         """
@@ -274,6 +277,9 @@ class BooleanOfferField(forms.BooleanField):
         """
         :returns: All range products for the request user.
         """
+        if not self.request:
+            return RangeProduct.objects.none()
+
         if hasattr(self.request, 'partners'):
             offers = ConditionalOffer.active.filter(
                 partner__in=self.request.partners)
@@ -292,12 +298,23 @@ class BooleanOfferField(forms.BooleanField):
         :returns: Query to filter the result containing only offers for this
         user when the Checkbox is checked.
         """
-        if self.request.GET.get('offer_only', False) == 'on':
+        if self.request_data.get('offer_only', False) == 'on':
             return Q(rangeproduct__in=self.get_range_products())
         return None
 
 
-class ProductFilter(forms.Form):
+class FilterFormBase(forms.Form):
+    def __init__(self, request_data, manager, qs, request=None):
+        self.request_data = request_data
+        self.manager = manager
+        self.request = request
+        self.wishlist_as_link = manager.wishlist_as_link
+        self.qs = qs
+        super().__init__(request_data)
+        self.fields = self.get_fields()
+
+
+class ProductFilter(FilterFormBase):
     """
     This filter has three kinds of fields:
     - MultipleChoiceAttributeField for dynamic attribute value fields
@@ -307,13 +324,6 @@ class ProductFilter(forms.Form):
     name = 'Filter'
     code = 'filter'
     disabled_fields = getattr(settings, 'OSCAR_SEARCH_DISABLED_FIELDS', [])
-
-    def __init__(self, request, manager, qs, *args, **kwargs):
-        self.manager = manager
-        self.request = request
-        self.qs = qs
-        super().__init__(request.GET, *args, **kwargs)
-        self.fields = self.get_fields()
 
     def initialize(self):
         """
@@ -343,14 +353,14 @@ class ProductFilter(forms.Form):
         """
         fields = {}
         for code in self.enabled_attached_fields:
-            fields[code] = MultipleChoiceProductField(code, self.request, self)
+            fields[code] = MultipleChoiceProductField(code, self.request_data, self)
         return fields
 
     def get_offer_field(self):
         """
         :returns: BooleanOfferField for offer_only filter
         """
-        field = BooleanOfferField(self.request, self)
+        field = BooleanOfferField(self.request_data, self)
         if field.get_range_products().exists():
             return {'offer_only': field}
         return {}
@@ -369,7 +379,7 @@ class ProductFilter(forms.Form):
         """
         fields = {}
         qs = ProductAttribute.objects.exclude(code__in=self.disabled_fields)
-        if ProductAttribute._meta.get_field('filter_enabled'):
+        if hasattr(ProductAttribute, 'filter_enabled'):
             qs = qs.filter(filter_enabled=True)
         qs = qs.filter(productattributevalue__product__in=self.qs)
         qs = qs.order_by('name', 'option_group_id')
@@ -380,10 +390,10 @@ class ProductFilter(forms.Form):
                 continue
 
             if attribute.type in (attribute.TEXT, attribute.FLOAT):
-                field = TextAttributeField(attribute, self.request, self)
+                field = TextAttributeField(attribute, self.request_data, self)
             elif attribute.type in (attribute.OPTION, attribute.MULTI_OPTION):
                 field = MultipleChoiceAttributeField(
-                    attribute, self.request, self)
+                    attribute, self.request_data, self)
             else:
                 raise NotImplementedError('Other fields need to be created')
             fields[str(attribute.id)] = field
@@ -413,7 +423,7 @@ class ProductFilter(forms.Form):
         return queries
 
 
-class UserFilter(forms.Form):
+class UserFilter(FilterFormBase):
     """
     This filter needs the user to be authenticated.
     It manages two fields with a very similar logic:
@@ -423,14 +433,6 @@ class UserFilter(forms.Form):
     name = 'Mein Shop'
     code = 'user'
     disabled_fields = getattr(settings, 'OSCAR_SEARCH_DISABLED_FIELDS', [])
-
-    def __init__(self, request, manager, qs, *args, **kwargs):
-        self.manager = manager
-        self.wishlist_as_link = manager.wishlist_as_link
-        self.request = request
-        self.qs = qs
-        super().__init__(request.GET, *args, **kwargs)
-        self.fields = self.get_fields()
 
     def get_fields(self):
         fields = {}
@@ -464,7 +466,7 @@ class UserFilter(forms.Form):
         It is executed by the FilterManager from outside.
         This filter needs the user to be authenticated.
         """
-        if not self.request.user.is_authenticated:
+        if not self.request or not self.request.user.is_authenticated:
             self.fields = {}
             return None
 
@@ -481,6 +483,9 @@ class UserFilter(forms.Form):
         """
         :returns: All wishlists of request user as choices.
         """
+        if not self.request:
+            return []
+
         if self.wishlist_as_link:
             return [
                 ('', _('zur Liste springen')),
@@ -492,6 +497,9 @@ class UserFilter(forms.Form):
         """
         :returns: All orders of request user as choices.
         """
+        if not self.request:
+            return []
+
         order_choices = []
         order_tuples = self.request.user.orders.values_list(
             'id', 'number', 'date_placed'
@@ -508,12 +516,12 @@ class UserFilter(forms.Form):
         """
         query = Q()
 
-        if 'wishlist' in self.request.GET:
-            wishlist_ids = self.request.GET.getlist('wishlist')
+        if 'wishlist' in self.request_data:
+            wishlist_ids = self.request_data.getlist('wishlist')
             query |= Q(wishlists_lines__wishlist_id__in=wishlist_ids)
 
-        if 'order' in self.request.GET:
-            order_ids = self.request.GET.getlist('order')
+        if 'order' in self.request_data:
+            order_ids = self.request_data.getlist('order')
             query |= Q(line__order_id__in=order_ids)
 
         return [query]

@@ -4,10 +4,8 @@ OrderByOptions are used to order the queryset just before executed on the db
 Therefore it is converted to a Choice in the OrderForm
 apps.search.forms.OrderForm
 """
-from django.utils.translation import gettext_lazy as _
-from django.contrib.postgres.search import SearchRank, SearchQuery
-from django.db.models.aggregates import Min
-from django.db.models import Q, When, Case, Value, BooleanField, F
+from django.contrib.postgres.search import SearchRank, SearchQuery, SearchVector
+from django.db.models import F
 from oscar.core.loading import get_class
 
 __all__ = ['OrderByOption', 'RankOrderByOption', 'PriceOrderByOption', ]
@@ -19,11 +17,12 @@ class OrderByOption:
     """
     This is the base class for doing every step to order the qs
     """
-    def __init__(self, request, code, name, sort_by=None):
-        self.request = request
+    def __init__(self, request_data, code, name, sort_by=None, request=None):
+        self.request_data = request_data
         self.code = code
         self.name = name
         self.sort_by = sort_by
+        self.request = request
 
     def get_ordered_qs(self, qs, query_string):
         """ This should be accessed from outside """
@@ -56,7 +55,6 @@ class OrderByOption:
 
 
 class RankOrderByOption(OrderByOption):
-
     def order(self, qs, query_string, *args):
         if query_string:
             qs = qs.order_by('-rank')
@@ -64,23 +62,33 @@ class RankOrderByOption(OrderByOption):
 
     def pre_union(self, qs, query_string, *args):
         if query_string:
-            vector = qs.model.get_search_vector()
+            default_search_fields = [
+                'title',
+                'slug',
+                'description',
+            ]
+            search_fields = getattr(
+                qs.model, 'search_fields', default_search_fields
+            )
+            vector = SearchVector(*search_fields)
             query = SearchQuery(query_string)
             qs = qs.annotate(rank=SearchRank(vector, query))
-        else:
+        elif hasattr(qs.model, 'priority'):
             qs = qs.order_by('-priority', '-date_created')
+        else:
+            qs = qs.order_by('-date_created')
         return qs
 
 
 class PriceOrderByOption(OrderByOption):
-
     def pre_union(self, qs, *args):
         """
         TODO: Need to make this domain agnostic!!!
         Currently it needs a strategy method to annotate the valid base price
         """
-        request = self.request
-        strategy = Selector().strategy(request=request, user=request.user)
-        qs = strategy.annotate_price(qs)
+        user = getattr(self.request, 'user') if self.request else None
+        strategy = Selector().strategy(request=self.request, user=user)
+        if hasattr(strategy, 'annotate_price'):
+            qs = strategy.annotate_price(qs)
         qs = qs.filter(base_price__isnull=False)
-        return qs.annotate(price=F('base_price'))
+        return qs

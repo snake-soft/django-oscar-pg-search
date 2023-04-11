@@ -3,6 +3,7 @@ from django.conf import settings
 from django import forms
 from django.utils.translation import gettext_lazy as _
 from django.forms.widgets import Input
+from django.http.request import QueryDict
 from .order_by_options import *
 
 
@@ -30,43 +31,50 @@ class OrderForm(forms.Form):
         widget=forms.Select(), required=False)
     sort_by.widget.attrs.update({'onchange': 'submitOrderForm(this.form);'})
 
-    def __init__(self, request, request_data, *args, **kwargs):
-        super().__init__(request_data, *args, **kwargs)
+    def __init__(self, request_data, *args, request=None, **kwargs):
+        assert isinstance(request_data, QueryDict)
+        self.request_data = request_data
         self.request = request
+        super().__init__(request_data, *args, **kwargs)
         self.fields['sort_by'].choices = self.get_sort_by_choices()
 
     @property
     def choice_objects(self):
         return [
             RankOrderByOption(
-                self.request,
+                self.request_data,
                 'relevancy',
                 _('Relevancy'),
                 '-rank',
+                request=self.request,
             ),
             OrderByOption(
-                self.request,
+                self.request_data,
                 'newest',
                 'Neuste Artikel',
                 '-date_created',
+                request=self.request,
             ),
             OrderByOption(
-                self.request,
+                self.request_data,
                 'updated',
                 'Letzte Änderungen',
                 '-date_updated',
+                request=self.request,
             ),
             OrderByOption(
-                self.request,
+                self.request_data,
                 'title-asc',
                 _('Title A to Z'),
                 'title',
+                request=self.request,
             ),
             OrderByOption(
-                self.request,
+                self.request_data,
                 'title-desc',
                 _('Title Z to A'),
                 '-title',
+                request=self.request,
             ),
         ]
 
@@ -74,22 +82,24 @@ class OrderForm(forms.Form):
     def choice_objects_with_price(self):
         return [
             PriceOrderByOption(
-                self.request,
+                self.request_data,
                 'price-asc',
                 _('Price low to high'),
-                'price',
+                'base_price',
+                request=self.request,
             ),
             PriceOrderByOption(
-                self.request,
+                self.request_data,
                 'price-desc',
                 _('Price high to low'),
-                '-price',
+                '-base_price',
+                request=self.request,
             ),
         ]
 
     def get_sort_by_choices(self):
         options = self.choice_objects
-        if not self.request.user.hide_price:
+        if self.request and not getattr(self.request.user, 'hide_price', False):
             options += self.choice_objects_with_price
         return ((choice.code, choice.name) for choice in options)
 

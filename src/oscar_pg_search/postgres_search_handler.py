@@ -26,14 +26,14 @@ class PostgresSearchHandler(SimpleProductSearchHandler):
     search_form_class = SearchForm
     order_form_class = OrderForm
 
-    def __init__(self, request, request_data, full_path, categories=None):
-        self.request = request
+    def __init__(self, request_data, full_path, categories=None, request=None):
         self.request_data = request_data
+        self.request = request
 
         self.search_form = self.search_form_class(request_data)
         self.query_string = self.search_form.get_query_string()
 
-        self.order_form = self.order_form_class(request, request_data)
+        self.order_form = self.order_form_class(request_data, request=request)
         self.order_by_option = self.order_form.get_sort_by()
 
         super().__init__(request_data, full_path, categories)
@@ -58,9 +58,9 @@ class PostgresSearchHandler(SimpleProductSearchHandler):
         return settings.OSCAR_PRODUCTS_PER_PAGE
 
     def get_queryset(self):
-        if hasattr(self.request, 'products'):
+        if self.request and hasattr(self.request, 'products'):
             qs = self.request.products
-        elif hasattr(Product, 'for_user'):
+        elif self.request and hasattr(Product, 'for_user'):
             qs = Product.for_user(self.request.user)
         else:
             qs = Product.objects.browsable()
@@ -77,7 +77,9 @@ class PostgresSearchHandler(SimpleProductSearchHandler):
 
         qs = self.search(qs, query_string)
 
-        self.filter_manager = FilterManager(self.request, qs)
+        self.filter_manager = FilterManager(
+            self.request_data, qs, request=self.request
+        )
         qs = self.filter_manager.result
 
         if self.order_by_option:
