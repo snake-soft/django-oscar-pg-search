@@ -1,0 +1,22 @@
+<style>
+    #search_form .input-group-append{
+        right:0;
+    }
+    #search_form_input{
+        border-radius: .25rem;
+    }
+    #search_form_button{
+        z-index: 1020;
+    }
+</style>
+
+<div class="col-12 col-sm-6 col-md-4 col-lg-3">
+<form id="search_form" class="form-inline input-group" method="GET" action="{% url 'search:search' %}">
+  {{ search_form.q }}
+  <div class="input-group-append position-absolute h-100">
+    <button id="search_form_button" class="btn btn-light" style="border:none;background:none;" type="submit">
+        <i class="fas fa-search" style=""></i>
+    </button>
+  </div>
+</form>
+</div>

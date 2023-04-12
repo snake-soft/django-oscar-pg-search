@@ -15,14 +15,14 @@ This way the search can be manipulated through the meta fields. It is running pr
 
 
 To-Do
------
+==========================================
 
 - Provide a generic way to use filter forms
 - Writing Tests
 
 
 Features
---------
+==========================================
 
 + Don't need to use some additional search backend like elastic
 + Creates filters (facets) for:
@@ -33,7 +33,10 @@ Features
 
 
 Installation
-------------
+==========================================
+
+Basic
+----------------------------------------------
 
 Install using pip:
 
@@ -62,9 +65,20 @@ Trigram search is our search algorithm. Enable it at your database by executing 
 CREATE EXTENSION pg_trgm;
 ```
 
+Optional Search box
+----------------------------------------------
+
+To install the included Search box that passes the previous search term.
+(eg. in 'oscar/partials/search.html')
+
+```python
+{% include 'oscar_pg_search/partials/search.html' %}
+```
+
+
 
 Settings
---------
+==========================================
 
 If you want to add some fields that are directly attached to the Product
 model:
