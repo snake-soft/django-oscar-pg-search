@@ -1,6 +1,7 @@
 from django.conf import settings
-from oscar.apps.search.signals import user_search
 from django.utils.module_loading import import_string
+from django.shortcuts import redirect
+from oscar.apps.search.signals import user_search
 from .forms import SearchForm, OrderForm
 
 
@@ -13,8 +14,18 @@ class SearchViewMixin:
     template_name = 'oscar/catalogue/browse.html'
     search_signal = user_search
     form_class = SearchForm
-    http_method_names = ['get', ]
+    http_method_names = ['get', 'post']
     results_per_page = settings.OSCAR_PRODUCTS_PER_PAGE
+
+    def dispatch1(self, request, *args, **kwargs):
+        return redirect(request)
+
+    def post(self, request, *args, **kwargs):
+        request_post = request.POST.copy()
+        del request_post['csrfmiddlewaretoken']
+        if 'q' in request.GET:
+            request_post['q'] = request.GET['q']
+        return redirect(f'{request.path}?{request_post.urlencode()}')
 
     def get_context_data(self, **kwargs):
         context = super().get_context_data(**kwargs)

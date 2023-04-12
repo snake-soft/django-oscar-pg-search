@@ -37,7 +37,6 @@ Installation
 
 Basic
 ----------------------------------------------
-
 Install using pip:
 
 ```bash
@@ -67,7 +66,6 @@ CREATE EXTENSION pg_trgm;
 
 Optional Search box
 ----------------------------------------------
-
 To install the included Search box that passes the previous search term.
 (eg. in 'oscar/partials/search.html')
 
@@ -75,6 +73,43 @@ To install the included Search box that passes the previous search term.
 {% include 'oscar_pg_search/partials/search.html' %}
 ```
 
+Optional Filter Forms
+----------------------------------------------
+To use the included filter forms, include them in the template eg. in 'oscar/layout_2_col.html' after '{% block column_left_extra %}{% endblock %}'.
+
+```python
+{% include 'oscar_pg_search/catalogue/partials/filter_forms.html' %}
+```
+
+and include the mixin into the catalogue views.
+
+```python
+# apps/catalogue/views.py
+from oscar.apps.catalogue import views
+from oscar_pg_search.mixins import SearchViewMixin
+
+
+class CatalogueView(SearchViewMixin, views.CatalogueView):
+    pass
+
+
+class ProductCategoryView(SearchViewMixin, views.ProductCategoryView):
+    pass
+
+```
+
+
+Optional Use Chosen.js
+----------------------------------------------
+To empower multiple choice fields with chosen load it eg. in 'oscar/base.html'.
+
+```python
+# At the beginning:
+{% load oscar_pg_search %}
+
+# After jQuery is loaded:
+{% oscar_pg_search_base %}
+```
 
 
 Settings

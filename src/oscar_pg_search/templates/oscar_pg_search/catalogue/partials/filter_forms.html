@@ -1,0 +1,13 @@
+<div class="card card-body bg-light mt-3">
+  <form id="filter_form" class="filter_form w-100" action="{{request.path}}?{{request.GET.urlencode}}" method="POST">{% csrf_token %}
+    {% for form in filter_forms %}
+      {% if form.fields %}
+          <div id="sidebar-{{ form.code }}" class="row collapse show">
+            <div class="container-fluid condensed">
+              {% include 'oscar/partials/form_fields.html' with slim=True %}
+            </div>
+          </div>
+      {% endif %}
+    {% endfor %}
+  </form>
+</div>

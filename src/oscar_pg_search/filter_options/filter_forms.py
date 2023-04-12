@@ -72,7 +72,7 @@ class ProductFilter(FilterFormBase):
     @property
     def enabled_attributes(self):
         qs = ProductAttribute.objects.all()
-        if ProductAttribute._meta.get_field('filter_enabled'):
+        if hasattr(ProductAttribute, 'filter_enabled'):
             qs = qs.filter(filter_enabled=True)
         codes = qs.values_list('code', flat=True)
         return {x for x in codes if x not in self.disabled_fields}
