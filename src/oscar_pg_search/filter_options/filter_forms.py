@@ -93,7 +93,7 @@ class ProductFilter(FilterFormBase):
                     and attribute.code not in self.enabled_attributes:
                 continue
 
-            if attribute.type in (attribute.TEXT, attribute.FLOAT):
+            if attribute.type in (attribute.TEXT, attribute.FLOAT, attribute.INTEGER):
                 field = TextAttributeField(attribute, self.request_data, self)
             elif attribute.type in (attribute.OPTION, attribute.MULTI_OPTION):
                 field = MultipleChoiceAttributeField(
