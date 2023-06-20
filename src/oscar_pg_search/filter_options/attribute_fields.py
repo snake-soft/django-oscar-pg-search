@@ -21,6 +21,7 @@ class TextAttributeField(AttributeFieldBase):
                     id__in=values_list)
                 values = values.values_list(self.fieldname, flat=True)
                 query_kwargs = {
+                    'attribute_values__attribute__code': self.attribute.code,
                     f'attribute_values__{self.fieldname}__in': values,
                 }
                 return Q(**query_kwargs)
