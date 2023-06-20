@@ -14,7 +14,9 @@ class TextAttributeField(AttributeFieldBase):
     def get_query(self):
         if str(self.attribute.id) in self.request_data:
             values_list = self.request_data.getlist(str(self.attribute.id))
-            if self.attribute.type in (self.attribute.TEXT, self.attribute.FLOAT):
+            text_fields = (self.attribute.TEXT, self.attribute.FLOAT,
+                           self.attribute.INTEGER)
+            if self.attribute.type in text_fields:
                 values = self.attribute.productattributevalue_set.filter(
                     id__in=values_list)
                 values = values.values_list(self.fieldname, flat=True)
