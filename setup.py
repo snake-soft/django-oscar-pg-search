@@ -4,7 +4,7 @@ from src.oscar_pg_search import __version__
 
 
 install_requires = [
-    'django>=3.0,<3.3',
+    'django>=3.0,<5',
     'django-oscar>=2.0,<3.3',
 ]
 
