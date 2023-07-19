@@ -4,6 +4,7 @@ from django.db.models import Q
 from django.conf import settings
 from django.urls.base import reverse
 from django.utils.translation import gettext_lazy as _
+from django.utils.functional import cached_property
 from oscar.core.loading import get_model
 from .base_form import FilterFormBase
 from .product_fields import MultipleChoiceProductField
@@ -46,7 +47,7 @@ class ProductFilter(FilterFormBase):
             del self.fields[fieldname]
         return result
 
-    @property
+    @cached_property
     def enabled_attached_fields(self):
         codes = getattr(settings, 'OSCAR_ATTACHED_PRODUCT_FIELDS', [])
         return [x for x in codes if x not in self.disabled_fields]
@@ -69,7 +70,7 @@ class ProductFilter(FilterFormBase):
             return {'offer_only': field}
         return {}
 
-    @property
+    @cached_property
     def enabled_attributes(self):
         qs = ProductAttribute.objects.all()
         if hasattr(ProductAttribute, 'filter_enabled'):
