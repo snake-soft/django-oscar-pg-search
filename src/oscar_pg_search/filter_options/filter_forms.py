@@ -5,6 +5,7 @@ from django.conf import settings
 from django.urls.base import reverse
 from django.utils.translation import gettext_lazy as _
 from django.utils.functional import cached_property
+from django.core.cache import cache
 from oscar.core.loading import get_model
 from .base_form import FilterFormBase
 from .product_fields import MultipleChoiceProductField
@@ -78,18 +79,25 @@ class ProductFilter(FilterFormBase):
         codes = qs.values_list('code', flat=True)
         return {x for x in codes if x not in self.disabled_fields}
 
-    def get_attribute_fields(self):
-        """
-        :returns: MultipleChoiceAttributeField for dynamic attribute values
-        """
-        fields = {}
+    def get_cached_attributes(self):
         qs = ProductAttribute.objects.exclude(code__in=self.disabled_fields)
         if hasattr(ProductAttribute, 'filter_enabled'):
             qs = qs.filter(filter_enabled=True)
         qs = qs.filter(productattributevalue__product__in=self.qs)
         qs = qs.order_by('name', 'option_group_id')
         qs = qs.distinct('name', 'option_group_id')
-        for attribute in qs:
+        return qs
+
+    def get_attribute_fields(self):
+        """
+        :returns: MultipleChoiceAttributeField for dynamic attribute values
+        """
+        fields = {}
+        cached_attributes = cache.get_or_set(
+            'oscar_pg_search__attributes',
+            self.get_cached_attributes,
+        )
+        for attribute in cached_attributes:
             if self.enabled_attributes \
                     and attribute.code not in self.enabled_attributes:
                 continue
