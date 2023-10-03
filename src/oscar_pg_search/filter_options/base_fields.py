@@ -12,7 +12,7 @@ ProductAttributeValue = get_model('catalogue', 'ProductAttributeValue')
 
 class MultipleChoiceFieldBase(forms.MultipleChoiceField):
     widget = forms.SelectMultiple(attrs={'class': 'chosen-select'})
-    fieldname: str
+    code: str
 
     def __init__(self, request_data, form, *args, request=None, **kwargs):
         super().__init__(required=False, *args, **kwargs)
@@ -26,7 +26,7 @@ class MultipleChoiceFieldBase(forms.MultipleChoiceField):
         This is running after the result was created by manager.
         """
         path = self.manager.request.get_full_path()
-        key = f'{path}_product_filter_choices__{self.fieldname}'
+        key = f'{path}_product_filter_choices__{self.code}'
         partner = getattr(self.manager, 'main_partner', None)
         if partner:
             key = f'partner{partner.pk}_{key}'
@@ -47,16 +47,16 @@ class AttributeFieldBase(MultipleChoiceFieldBase):
     def __init__(self, attribute, *args, **kwargs):
         super().__init__(*args, label=attribute.name, **kwargs)
         self.attribute = attribute
-        self.fieldname = f'value_{self.attribute.code}'
+        self.fieldname = f'value_{self.attribute.type}'
+        self.code = f'value_{self.attribute.code}'
 
 
 class ProductFieldBase(MultipleChoiceFieldBase):
     def __init__(self, code, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.code = code
         self.field = Product.get_field(code)
         self.label = Product.get_field_label(self.field)
-        self.fieldname = code
+        self.code = code
 
     def clean_value(self, value):
         clean_func = {
