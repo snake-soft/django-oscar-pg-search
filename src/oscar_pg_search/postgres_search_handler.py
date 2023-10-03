@@ -10,6 +10,7 @@ from django.db.models import Q, F, ExpressionWrapper
 from django.utils.safestring import mark_safe
 from django.db.models.functions.comparison import Coalesce
 from django.db import connection
+from django.core.cache import cache
 
 from oscar.apps.catalogue.search_handlers import SimpleProductSearchHandler
 from oscar.core.loading import get_model
@@ -88,8 +89,19 @@ class PostgresSearchHandler(SimpleProductSearchHandler):
 
         return qs
 
+    def get_paginator(self, *args, **kwargs):
+        paginator = super().get_paginator(*args, **kwargs)
+        partner_pk = self.request.user.partner.pk or 0
+        path = self.request.get_full_path()
+        count = cache.get_or_set(
+            f'partner{partner_pk}_{path}_result_count',
+            lambda: paginator.count,
+        )
+        setattr(paginator, 'count', count)
+        return paginator
+
     def get_context_data(self, *, object_list=None, **kwargs):
-        context = SimpleProductSearchHandler.get_context_data(self, **kwargs)
+        context = super().get_context_data(object_list=object_list, **kwargs)
         search_params = ''
         if self.query_string:
             search_params += '&q=' + self.query_string
@@ -102,11 +114,10 @@ class PostgresSearchHandler(SimpleProductSearchHandler):
     def get_search_context_data(self, context_object_name):
         self.context_object_name = context_object_name
         context = self.get_context_data(object_list=self.object_list)
-        self.get_context_data(object_list=self.object_list.filter(id=0))
-        if context['page_obj']:
+        if 'page_obj' in context:
             context[context_object_name] = context['page_obj'].object_list
         else:
-            context[context_object_name] = self.object_list.filter(id=0)
+            context[context_object_name] = self.object_list.none()
         return context
 
     def search(self, qs, query_string):

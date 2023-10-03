@@ -12,13 +12,14 @@ class FilterManager:
     wishlist_as_link = False
 
     def __init__(self, request_data, qs, request=None):
+        self.request = request
         self.request_data = request_data
         self.qs = qs
 
         # Domain specific logic for creating Partner based options:
         if request and hasattr(request, 'partners'):
-            main_partner = getattr(request, 'partners')[0]
-            self.wishlist_as_link = main_partner.wishlist_as_link
+            self.main_partner = getattr(request, 'partners')[0]
+            self.wishlist_as_link = self.main_partner.wishlist_as_link
         self.filters = self.get_filters(request=request)
         self.result = self.get_result()
         self.initialize_filters()
