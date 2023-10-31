@@ -17,7 +17,7 @@ class BooleanOfferField(forms.BooleanField):
     def __init__(self, request_data, form, *args, request=None, **kwargs):
         super().__init__(label='Nur Angebote', required=False, *args, **kwargs)
         self.widget.attrs={
-            'onchange': 'submitFilterForm(this.form);',
+            'onchange': "$('#products').empty();",
             'class': 'mt-3',
         }
         self.code = 'offer_only'
@@ -25,7 +25,7 @@ class BooleanOfferField(forms.BooleanField):
         self.manager = form.manager
         self.form = form
         self.choices = None
-        self.request = request
+        self.request = self.manager.request
 
     def initialize(self):
         """
